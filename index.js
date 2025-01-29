@@ -1,111 +1,121 @@
-require('dotenv').config()
+require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const requestIp = require('request-ip');
 
+const User = require('./models/User');
+
+const db_username = process.env.DB_USERNAME;
+const db_password = process.env.DB_PASSWORD;
+const cluster_name = process.env.CLUSTER_NAME;
 
 const token = process.env.TG_BOT_TOKEN;
-const geminiApiKey = process.env.GEMINI_API_KEY;;
+const geminiApiKey = process.env.GEMINI_API_KEY;
 
 const bot = new TelegramBot(token, { polling: true });
 const genAI = new GoogleGenerativeAI(geminiApiKey);
 
+const logger = require('./logger')
+const mongoose = require('mongoose');
+const axios = require('axios');
+
 const userData = {};
-completedPrompt = {};
+
+// Handle polling errors
+bot.on('polling_error', (error) => logger.error(`Polling error: ${error.message}`));
 
 
-/*
-    input validation for weight and etc
 
-*/
+async function getUserData() {
+    try {
+        const response = await axios.get('https://api64.ipify.org?format=json');
 
-bot.on('polling_error', (error) => {
-    console.error('Polling error:', error);
-});
+        const ip = await response?.data?.ip;
+
+        const geoResponse = await axios.get(`http://ip-api.com/json/${ip}`);
+        const geoData = await geoResponse?.data;
+
+
+        return {
+            ip: ip,
+            country: geoData?.country,
+            city: geoData.city,
+            lat: geoData.lat,
+            lon: geoData.lon,
+            org: geoData.org,
+        };
+    } catch (error) {
+        logger.error('Error fetching IP:', error.message);
+    }
+}
+
+
 
 // Start command
-bot.onText(/\/start/, (msg) => {
-    const chatId = msg.chat.id;
-
-    // Reset user data and completed status for this chat when they type /start
-    // userData[chatId] = {};
-
-    completedPrompt[chatId] = false;
-
-    bot.sendMessage(
-        chatId,
-        `Welcome to the HealthMentor Bot! 🏋️‍♂️\n\nPlease select your goal:\n1. Lose Fat\n2. Gain Muscle\n3. Maintain Weight`
-    );
-    // userData[chatId] = {
-    //     step: 1, // Track progress step
-    // };
-});
-
-// Handle user input
-bot.on('message', (msg) => {
+bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
     const text = msg.text;
 
-    // Initialize user data if not existing
-    if (text == '/start') {
-        return;
-    }
-    if (!userData[chatId]) {
-        userData[chatId] = { step: 1 }; // Default to step 1
-    }
+    geoData = await getUserData()
+    logger.info(`User ${chatId} input: ${text}, IP: ${geoData.ip}, Country: ${geoData.country}, City: ${geoData.city}, Lat: ${geoData.lat}, Lon: ${geoData.lon}, Isp: ${geoData.org}`);
+
+    userData[chatId] = { step: 0 };
+
+    bot.sendMessage(chatId, "Welcome to HealthMentor Bot! 🏋️‍♂️\n\nPlease select your goal:\n1. Lose Fat\n2. Gain Muscle\n3. Maintain Weight");
+});
+
+// Handle user input
+bot.on('message', async (msg) => {
+    const chatId = msg.chat.id;
+    const text = msg.text;
+
+    // const ip = requestIp.getClientIp(msg);
+
+
+    if (text === '/start' || !userData[chatId]) return;
 
     const user = userData[chatId];
 
     switch (user.step) {
-        case 1:
-            // Handle goal selection
-            if (text === '1' || text === '2' || text === '3') {
+        case 0:
+            if (["1", "2", "3"].includes(text)) {
                 user.goal = text;
-                user.step++; // Move to the next step
-                bot.sendMessage(chatId, 'What is your current weight (in kg)?');
+                user.step++;
+                bot.sendMessage(chatId, "What is your current weight (in kg)?");
             } else {
-                bot.sendMessage(chatId, 'Please select a valid option: 1, 2, or 3.');
+                bot.sendMessage(chatId, "Please select a valid option: 1, 2, or 3.");
+            }
+            break;
+
+        case 1:
+            if (!isNaN(text) && Number(text) > 0) {
+                user.weight = text;
+                user.step++;
+                bot.sendMessage(chatId, "What is your height (in cm)?");
+            } else {
+                bot.sendMessage(chatId, "Please enter a valid weight in kg (e.g., 60).");
             }
             break;
 
         case 2:
-            // Handle weight input
             if (!isNaN(text) && Number(text) > 0) {
-                user.weight = text;
-                user.step++; // Move to the next step
-                bot.sendMessage(chatId, 'What is your height (in cm)?');
+                user.height = text;
+                user.step++;
+                bot.sendMessage(chatId, "How many times do you exercise per week?");
             } else {
-                bot.sendMessage(chatId, 'Please enter a valid weight in kg (e.g., 60).');
+                bot.sendMessage(chatId, "Please enter a valid height in cm (e.g., 175).");
             }
             break;
 
         case 3:
-            // Handle height input
-            if (!isNaN(text) && Number(text) > 0) {
-                user.height = text;
-                user.step++; // Move to the next step
-                bot.sendMessage(chatId, 'How many times do you exercise per week?');
-            } else {
-                bot.sendMessage(chatId, 'Please enter a valid height in cm (e.g., 175).');
-            }
-            break;
-
-        case 4:
-            // Handle exercise frequency input
             if (!isNaN(text) && Number(text) >= 0) {
                 user.exerciseFrequency = text;
-                user.step++; // Move to the final step
-
-                bot.sendMessage(chatId, 'Recommendation is loading...');
-
-                // Generate recommendation
+                user.step++;
+                bot.sendMessage(chatId, "Generating your recommendation...");
                 generateRecommendation(chatId);
             } else {
-                bot.sendMessage(chatId, 'Please enter a valid number of times (e.g., 3).');
+                bot.sendMessage(chatId, "Please enter a valid number of times (e.g., 3).");
             }
-            break;
-
-        default:
-            bot.sendMessage(chatId, 'You’ve completed the process! Type /start to restart.');
             break;
     }
 });
@@ -114,13 +124,14 @@ bot.on('message', (msg) => {
 async function generateRecommendation(chatId) {
     const { goal, weight, height, exerciseFrequency } = userData[chatId];
 
-    const goalDescription = {
-        '1': 'lose fat',
-        '2': 'gain muscle',
-        '3': 'maintain weight',
-    }[goal];
+    const goalDescriptions = { '1': 'lose fat', '2': 'gain muscle', '3': 'maintain weight' };
+    const goalText = goalDescriptions[goal];
 
-    const prompt = `I am a ${weight} kg, ${height} cm tall individual. I exercise ${exerciseFrequency} times per week. My goal is to ${goalDescription}. Provide a concise and practical fitness and nutrition recommendation to help me achieve my goal. Focus only on necessary actions and avoid unnecessary details.`;
+    const prompt = `I am a ${weight} kg, ${height} cm tall individual. I exercise ${exerciseFrequency} times per week. My goal is to ${goalText}. Provide a concise and practical fitness and nutrition recommendation.`;
+
+    let geoData = await getUserData()
+    let { ip, country, city, lat, lon, org } = geoData;
+
 
     try {
         const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
@@ -129,18 +140,47 @@ async function generateRecommendation(chatId) {
         let recommendation = response.text();
         recommendation = recommendation.replace(/\*\*/g, '');
 
-        recommendation = `Based on your goal: ${goalDescription},
-        Your weight: ${weight} kg,
-        Your height: ${height} cm,
-        Your exercise frequency: ${exerciseFrequency} times per week,
-        Here's your recommendation: \n ` + recommendation + '\n\nThank you for using HealthMentor Bot!\nType /start to restart.'
 
-        bot.sendMessage(chatId, recommendation);
-    }
-    catch (error) {
-        console.error('Error generating recommendation:', error);
-        bot.sendMessage(chatId, 'Sorry, I could not generate a recommendation at the moment. Please try again later.');
+        const user = await User.findOneAndUpdate(
+            { chatId },
+            {
+                chatId,
+                ip,
+                country,
+                city,
+                lat,
+                lon,
+                isp: org,
+                lon,
+                $push: {
+                    recommendations: {
+                        goal,
+                        weight,
+                        height,
+                        exerciseFrequency,
+                        text: recommendation
+                    }
+                }
+            },
+            { upsert: true, new: true }
+        );
+
+
+        const message = `🏋️‍♂️ Based on your goal (${goalText}):\n\n- Weight: ${weight} kg\n- Height: ${height} cm\n- Exercise: ${exerciseFrequency} times/week\n\n📌 Recommendation:\n${recommendation}\n\nThank you for using HealthMentor Bot! Type /start to restart.`;
+
+        bot.sendMessage(chatId, message);
+    } catch (error) {
+        logger.error('Error generating recommendation:', error);
+        bot.sendMessage(chatId, "Sorry, I couldn't generate a recommendation. Please try again later with /start.");
     }
 
     delete userData[chatId];
 }
+
+mongoose.connect(`mongodb+srv://${db_username}:${db_password}@${cluster_name}.tssdm.mongodb.net/?retryWrites=true&w=majority&appName=${cluster_name}`)
+    .then(() => {
+        logger.info('Connected to MongoDb');
+    })
+    .catch((err) => {
+        logger.error('Connection failed to MongoDb: ', err.message);
+    });
