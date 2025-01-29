@@ -162,6 +162,11 @@ async function generateRecommendation(chatId) {
         let recommendation = response.text();
         recommendation = recommendation.replace(/\*\*/g, '');
 
+        if (mongoose.connection.readyState !== 1) {
+            logger.error("DB is not connected.");
+            bot.sendMessage(chatId, "Connection issue. Please try again later with /start.");
+            return;
+        }
 
         const user = await User.findOneAndUpdate(
             { chatId },
@@ -186,6 +191,7 @@ async function generateRecommendation(chatId) {
             },
             { upsert: true, new: true }
         );
+        logger.info(`User ${chatId} updated successfully.`);
 
 
         const message = `🏋️‍♂️ Based on your goal (${goalText}):\n\n- Weight: ${weight} kg\n- Height: ${height} cm\n- Exercise: ${exerciseFrequency} times/week\n\n📌 Recommendation:\n${recommendation}\n\nThank you for using HealthMentor Bot! Type /start to restart.`;
@@ -199,7 +205,13 @@ async function generateRecommendation(chatId) {
     delete userData[chatId];
 }
 
-mongoose.connect(`mongodb+srv://${db_username}:${db_password}@${cluster_name}.tssdm.mongodb.net/?retryWrites=true&w=majority&appName=${cluster_name}`)
+mongoose.connect(`mongodb+srv://${db_username}:${db_password}@${cluster_name}.tssdm.mongodb.net/?retryWrites=true&w=majority&appName=${cluster_name}`
+    , {
+        serverSelectionTimeoutMS: 30000,
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+    }
+)
     .then(() => {
         logger.info('Connected to MongoDb');
     })
