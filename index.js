@@ -1,7 +1,13 @@
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
+const express = require('express');
+
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const requestIp = require('request-ip');
+
+const app = express();
+const port = process.env.PORT || 3200;
+
 
 const User = require('./models/User');
 
@@ -10,9 +16,25 @@ const db_password = process.env.DB_PASSWORD;
 const cluster_name = process.env.CLUSTER_NAME;
 
 const token = process.env.TG_BOT_TOKEN;
+const webhookUrl = `https://fitnesstelegrambot.onrender.com/${token}`;
+
+const bot = new TelegramBot(token, { webHook: true });
+
+bot.setWebHook(webhookUrl);
+
+app.use(express.json());
+
+app.post(`/${token}`, (req, res) => {
+    bot.processUpdate(req.body);
+    res.sendStatus(200);
+});
+
+app.listen(port, () => {
+    console.log(`Bot server is running on port ${port}`);
+});
+
 const geminiApiKey = process.env.GEMINI_API_KEY;
 
-const bot = new TelegramBot(token, { polling: true });
 const genAI = new GoogleGenerativeAI(geminiApiKey);
 
 const logger = require('./logger')
