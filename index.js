@@ -208,8 +208,6 @@ async function generateRecommendation(chatId) {
 mongoose.connect(`mongodb+srv://${db_username}:${db_password}@${cluster_name}.tssdm.mongodb.net/?retryWrites=true&w=majority&appName=${cluster_name}`
     , {
         serverSelectionTimeoutMS: 30000,
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
     }
 )
     .then(() => {
