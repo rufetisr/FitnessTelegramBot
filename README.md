@@ -1,6 +1,6 @@
 # HealthMentor Bot
 
-HealthMentor Bot is a Telegram bot designed to provide personalized fitness and nutrition recommendations based on user inputs. The bot integrates Google’s Gemini API for generating recommendations and uses MongoDB to store user data and their fitness goals.
+HealthMentor Bot is a Telegram bot designed to provide personalized fitness and nutrition recommendations based on user inputs. The bot integrates Google Generative AI (Gemini API) for generating recommendations and uses MongoDB to store user data and their fitness goals.
 
 [![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen?style=flat-square)](https://web.telegram.org/k/#@health_MentorBot)
 
