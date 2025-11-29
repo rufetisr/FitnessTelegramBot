@@ -2,18 +2,19 @@ require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const requestIp = require('request-ip');
+// const { GoogleGenerativeAI } = require('@google/genai');
+const { GoogleGenAI } = require('@google/genai');
+// const requestIp = require('request-ip');
 
 const app = express();
 const port = process.env.PORT || 3200;
 
 
-const User = require('./models/User');
+// const User = require('./models/User');
 
-const db_username = process.env.DB_USERNAME;
-const db_password = process.env.DB_PASSWORD;
-const cluster_name = process.env.CLUSTER_NAME;
+// const db_username = process.env.DB_USERNAME;
+// const db_password = process.env.DB_PASSWORD;
+// const cluster_name = process.env.CLUSTER_NAME;
 
 const token = process.env.TG_BOT_TOKEN;
 const webhookUrl = `https://fitnesstelegrambot.onrender.com/${token}`;
@@ -35,7 +36,7 @@ app.listen(port, () => {
 
 const geminiApiKey = process.env.GEMINI_API_KEY;
 
-const genAI = new GoogleGenerativeAI(geminiApiKey);
+const genAI = new GoogleGenAI();
 
 const logger = require('./logger')
 const mongoose = require('mongoose');
@@ -89,6 +90,7 @@ bot.onText(/\/start/, async (msg) => {
 // Handle user input
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
+    
     const text = msg.text;
 
     // const ip = requestIp.getClientIp(msg);
@@ -151,46 +153,48 @@ async function generateRecommendation(chatId) {
 
     const prompt = `I am a ${weight} kg, ${height} cm tall individual. I exercise ${exerciseFrequency} times per week. My goal is to ${goalText}. Provide a concise and practical fitness and nutrition recommendation.`;
 
-    let geoData = await getUserData()
-    let { ip, country, city, lat, lon, org } = geoData;
+    // let geoData = await getUserData()
+    // let { ip, country, city, lat, lon, org } = geoData;
 
 
     try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        let recommendation = response.text();
+        // const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        const result = await genAI.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt
+        })
+        let recommendation = result.text;
         recommendation = recommendation.replace(/\*\*/g, '');
 
-        if (mongoose.connection.readyState !== 1) {
-            logger.error("DB is not connected.");
-            bot.sendMessage(chatId, "Connection issue. Please try again later with /start.");
-            return;
-        }
+        // if (mongoose.connection.readyState !== 1) {
+        //     logger.error("DB is not connected.");
+        //     bot.sendMessage(chatId, "Connection issue. Please try again later with /start.");
+        //     return;
+        // }
 
-        const user = await User.findOneAndUpdate(
-            { chatId },
-            {
-                chatId,
-                ip,
-                country,
-                city,
-                lat,
-                lon,
-                isp: org,
-                lon,
-                $push: {
-                    recommendations: {
-                        goal,
-                        weight,
-                        height,
-                        exerciseFrequency,
-                        text: recommendation
-                    }
-                }
-            },
-            { upsert: true, new: true }
-        );
+        // const user = await User.findOneAndUpdate(
+        //     { chatId },
+        //     {
+        //         chatId,
+        //         ip,
+        //         country,
+        //         city,
+        //         lat,
+        //         lon,
+        //         isp: org,
+        //         lon,
+        //         $push: {
+        //             recommendations: {
+        //                 goal,
+        //                 weight,
+        //                 height,
+        //                 exerciseFrequency,
+        //                 text: recommendation
+        //             }
+        //         }
+        //     },
+        //     { upsert: true, new: true }
+        // );
         logger.info(`User ${chatId} updated successfully.`);
 
 
@@ -205,14 +209,14 @@ async function generateRecommendation(chatId) {
     delete userData[chatId];
 }
 
-mongoose.connect(`mongodb+srv://${db_username}:${db_password}@${cluster_name}.tssdm.mongodb.net/?retryWrites=true&w=majority&appName=${cluster_name}`
-    , {
-        serverSelectionTimeoutMS: 30000,
-    }
-)
-    .then(() => {
-        logger.info('Connected to MongoDb');
-    })
-    .catch((err) => {
-        logger.error('Connection failed to MongoDb: ', err.message);
-    });
+// mongoose.connect(`mongodb+srv://${db_username}:${db_password}@${cluster_name}.tssdm.mongodb.net/?retryWrites=true&w=majority&appName=${cluster_name}`
+//     , {
+//         serverSelectionTimeoutMS: 30000,
+//     }
+// )
+//     .then(() => {
+//         logger.info('Connected to MongoDb');
+//     })
+//     .catch((err) => {
+//         logger.error('Connection failed to MongoDb: ', err.message);
+//     });
