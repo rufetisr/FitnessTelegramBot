@@ -90,7 +90,7 @@ bot.onText(/\/start/, async (msg) => {
 // Handle user input
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
-    
+
     const text = msg.text;
 
     // const ip = requestIp.getClientIp(msg);
@@ -104,14 +104,48 @@ bot.on('message', async (msg) => {
         case 0:
             if (["1", "2", "3"].includes(text)) {
                 user.goal = text;
+
+                bot.sendMessage(chatId, "What is your gender?", {
+                    reply_markup: {
+                        keyboard: [
+                            [{ text: 'Male' }, { text: 'Female' }],
+                            [{ text: 'Other / Prefer not to say' }]
+                        ],
+                        // Hide the keyboard after one use
+                        one_time_keyboard: true,
+                        // Adjust size to fit buttons
+                        resize_keyboard: true
+                    }
+                });
                 user.step++;
-                bot.sendMessage(chatId, "What is your current weight (in kg)?");
+                // bot.sendMessage(chatId, "What is your current weight (in kg)?");
             } else {
                 bot.sendMessage(chatId, "Please select a valid option: 1, 2, or 3.");
             }
             break;
-
         case 1:
+            const validGenders = ['Male', 'Female', 'Other / Prefer not to say'];
+
+            if (validGenders.includes(text)) {
+                user.gender = text;
+                user.step++;
+                // **NEXT STEP:** Ask for weight
+                bot.sendMessage(chatId, "What is your current weight (in kg)?");
+            } else {
+                // Re-send the question and keyboard if the text is not a valid button
+                bot.sendMessage(chatId, "Please select a valid gender option from the keyboard.", {
+                    reply_markup: {
+                        keyboard: [
+                            [{ text: 'Male' }, { text: 'Female' }],
+                            [{ text: 'Other / Prefer not to say' }]
+                        ],
+                        one_time_keyboard: true,
+                        resize_keyboard: true
+                    }
+                });
+            }
+            break;
+        case 2:
             if (!isNaN(text) && Number(text) > 0) {
                 user.weight = text;
                 user.step++;
@@ -119,9 +153,8 @@ bot.on('message', async (msg) => {
             } else {
                 bot.sendMessage(chatId, "Please enter a valid weight in kg (e.g., 60).");
             }
-            break;
-
-        case 2:
+            break;     
+        case 3:
             if (!isNaN(text) && Number(text) > 0) {
                 user.height = text;
                 user.step++;
@@ -131,7 +164,7 @@ bot.on('message', async (msg) => {
             }
             break;
 
-        case 3:
+        case 4:
             if (!isNaN(text) && Number(text) >= 0) {
                 user.exerciseFrequency = text;
                 user.step++;
@@ -146,13 +179,15 @@ bot.on('message', async (msg) => {
 
 // Generate recommendation using Gemini API
 async function generateRecommendation(chatId) {
-    const { goal, weight, height, exerciseFrequency } = userData[chatId];
+    const { goal, weight, height, exerciseFrequency, gender } = userData[chatId];
 
     const goalDescriptions = { '1': 'lose fat', '2': 'gain muscle', '3': 'maintain weight' };
     const goalText = goalDescriptions[goal];
 
-    const prompt = `I am a ${weight} kg, ${height} cm tall individual. I exercise ${exerciseFrequency} times per week. My goal is to ${goalText}. Provide a concise and practical fitness and nutrition recommendation.`;
+    const prompt = `I am a ${gender}, ${weight} kg, ${height} cm tall individual. I exercise ${exerciseFrequency} times per week. My goal is to ${goalText}. Provide a concise and brief practical fitness and nutrition recommendation.`;
 
+    console.log(prompt);
+    
     // let geoData = await getUserData()
     // let { ip, country, city, lat, lon, org } = geoData;
 
@@ -198,7 +233,7 @@ async function generateRecommendation(chatId) {
         logger.info(`User ${chatId} updated successfully.`);
 
 
-        const message = `🏋️‍♂️ Based on your goal (${goalText}):\n\n- Weight: ${weight} kg\n- Height: ${height} cm\n- Exercise: ${exerciseFrequency} times/week\n\n📌 Recommendation:\n${recommendation}\n\nThank you for using HealthMentor Bot! Type /start to restart.`;
+        const message = `🏋️‍♂️ Based on your goal (${goalText}):\n\n- Gender: ${gender}\n- Weight: ${weight} kg\n- Height: ${height} cm\n- Exercise: ${exerciseFrequency} times/week\n\n📌 Recommendation:\n${recommendation}\n\nThank you for using HealthMentor Bot! Type /start to restart.`;
 
         bot.sendMessage(chatId, message);
     } catch (error) {
