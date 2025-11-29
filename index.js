@@ -36,7 +36,7 @@ app.listen(port, () => {
 
 const geminiApiKey = process.env.GEMINI_API_KEY;
 
-const genAI = new GoogleGenAI();
+const genAI = new GoogleGenAI({});
 
 const logger = require('./logger')
 const mongoose = require('mongoose');
